@@ -393,6 +393,21 @@ Deno.serve(async (req: Request) => {
     const body = await req.json();
     const action = String(body.action ?? "");
 
+    if (action === "heartbeat") {
+      const gameId = String(body.gameId ?? "");
+      if (!gameId) throw new ApiError("A game ID is required.");
+      const game = await getGameForPlayer(gameId, user.id);
+      const { data: touched, error: heartbeatError } = await admin
+        .from("uno_games")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", gameId)
+        .select("id")
+        .maybeSingle();
+      if (heartbeatError) throw new ApiError("Could not keep the room active.", 500);
+      if (!touched) throw new ApiError("This room is no longer available.", 404);
+      return respond({ ok: true, status: game.status });
+    }
+
     if (action === "create") {
       const displayName = cleanName(body.displayName, user.user_metadata?.display_name ?? user.email?.split("@")[0] ?? "Player");
       let game: any = null;
