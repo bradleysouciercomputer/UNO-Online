@@ -37,11 +37,20 @@ async function api(body) {
   const result = await supabase.functions.invoke("uno-game", { body });
   if (result.error) {
     let message = result.error.message || "The game server could not complete that action.";
+    let status = result.error.context?.status ?? 0;
     try {
-      const detail = await result.error.context?.json();
+      const detail = await result.error.context?.clone?.().json();
       if (detail?.error) message = detail.error;
     } catch {}
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = status;
+    error.code = result.error.name || "FUNCTION_ERROR";
+    throw error;
+  }
+  if (result.data?.error) {
+    const error = new Error(result.data.error);
+    error.status = 400;
+    throw error;
   }
   return result.data;
 }
@@ -222,11 +231,62 @@ async function openRoom(room) {
   render();
   await watchGame(snapshot.gameId);
 }
+let restoreInProgress = false;
+
+function renderRestoreLoading() {
+  renderTopbar();
+  app.innerHTML = '<section class="restore-state panel"><span class="spinner"></span><h1>Rejoining your room…</h1><p>Restoring your saved UNO game. Your room is being kept safe while we reconnect.</p></section>';
+}
+
+function renderRestoreProblem(message) {
+  renderTopbar();
+  app.innerHTML =
+    '<section class="restore-state panel">' +
+      '<div class="restore-icon">↻</div>' +
+      '<div class="panel-kicker">ROOM SAVED</div>' +
+      '<h1>Having trouble reconnecting.</h1>' +
+      '<p>' + esc(message || "Your saved room could not be reached right now.") + '</p>' +
+      '<p class="restore-note">Your room code and saved room reference have been kept. Nothing has been deleted. Try reconnecting, or explicitly close the waiting room.</p>' +
+      '<div class="restore-actions"><button class="button button-primary" data-action="retry-restore" data-loading>Try again</button><button class="button button-quiet" data-action="close-saved-room" data-loading>Close room &amp; go home</button></div>' +
+    '</section>';
+}
+
 async function restoreGame() {
   const id = localStorage.getItem("uno-active-game");
   if (!id || !session?.user) { renderDashboard(); return; }
-  try { await openRoom(await api({ action: "get", gameId: id })); }
-  catch { localStorage.removeItem("uno-active-game"); snapshot = null; renderDashboard(); }
+  if (restoreInProgress) return;
+
+  restoreInProgress = true;
+  renderRestoreLoading();
+  let lastError = null;
+  try {
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const restored = await api({ action: "get", gameId: id });
+        if (localStorage.getItem("uno-active-game") !== id || !session?.user) return;
+        await openRoom(restored);
+        return;
+      } catch (error) {
+        lastError = error;
+        if (error.status === 401 && attempt === 0) {
+          try {
+            const refreshed = await supabase.auth.refreshSession();
+            if (refreshed.data?.session) {
+              session = refreshed.data.session;
+              continue;
+            }
+          } catch {}
+        }
+        const retryable = !error.status || error.status >= 500 || error.status === 408 || error.status === 429;
+        if (!retryable || attempt === 3) break;
+        await new Promise((resolve) => setTimeout(resolve, [400, 900, 1600][attempt]));
+      }
+    }
+    snapshot = null;
+    renderRestoreProblem(lastError?.message);
+  } finally {
+    restoreInProgress = false;
+  }
 }
 async function move(type, extra = {}) {
   if (!snapshot || busy) return;
@@ -265,8 +325,23 @@ app.addEventListener("click", async (event) => {
     session = null; snapshot = null;
     localStorage.removeItem("uno-active-game");
     await stopWatching(); renderAuth();
-  } else if (action === "resume") {
+  } else if (action === "resume" || action === "retry-restore") {
     await restoreGame();
+  } else if (action === "close-saved-room") {
+    const savedGameId = localStorage.getItem("uno-active-game");
+    if (!savedGameId) { renderDashboard(); return; }
+    setBusy(true);
+    try {
+      await api({ action: "leave", gameId: savedGameId });
+      localStorage.removeItem("uno-active-game");
+      snapshot = null;
+      await stopWatching();
+      renderDashboard();
+      notify("Your waiting room was closed.");
+    } catch (error) {
+      notify(error.message || "The room could not be closed. It has been kept saved.", true);
+      renderRestoreProblem(error.message);
+    } finally { setBusy(false); }
   } else if (action === "copy-code") {
     if (!snapshot?.roomCode) return;
     try { await navigator.clipboard.writeText(snapshot.roomCode); notify("Room code copied."); }
@@ -345,7 +420,7 @@ const initial = await supabase.auth.getSession();
 session = initial.data.session;
 renderTopbar();
 if (session?.user) await restoreGame();
-else renderAuth();
+else renderAuth(localStorage.getItem("uno-active-game") ? "Sign in to return to your saved room. Your room has not been removed." : "");
 supabase.auth.onAuthStateChange((event, nextSession) => {
   session = nextSession;
   if (event === "SIGNED_OUT" || !nextSession) {
@@ -353,5 +428,7 @@ supabase.auth.onAuthStateChange((event, nextSession) => {
     localStorage.removeItem("uno-active-game");
     void stopWatching();
     renderAuth();
+  } else if (event === "SIGNED_IN" && localStorage.getItem("uno-active-game") && !snapshot && !restoreInProgress) {
+    void restoreGame();
   }
 });
