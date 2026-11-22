@@ -425,9 +425,8 @@ supabase.auth.onAuthStateChange((event, nextSession) => {
   session = nextSession;
   if (event === "SIGNED_OUT" || !nextSession) {
     snapshot = null;
-    localStorage.removeItem("uno-active-game");
     void stopWatching();
-    renderAuth();
+    renderAuth(localStorage.getItem("uno-active-game") ? "Sign in again to return to your saved room. Your room has been kept." : "");
   } else if (event === "SIGNED_IN" && localStorage.getItem("uno-active-game") && !snapshot && !restoreInProgress) {
     void restoreGame();
   }
