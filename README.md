@@ -27,3 +27,18 @@ The game uses a standard 108-card deck and deals seven cards to each player. A p
 
 ## Security notes
 Only the Supabase publishable key is present in the static client. The database has RLS enabled; clients cannot read game rows or write hands. The Edge Function authenticates the current user and performs privileged game operations server-side. Never add a Supabase secret or service-role key to this repository.
+
+
+## Automatic room cleanup
+The `pg_cron` job `uno-stale-room-cleanup` runs every 15 minutes.
+
+- Empty waiting rooms (e.g. a create request that failed before adding its first player) are removed after 10 minutes.
+- Waiting rooms are removed after 12 hours without any member heartbeat.
+- Active clients heartbeat the room every 60 seconds while the page is visible.
+- In-progress games are removed after 14 days without activity.
+- Finished games are retained for 7 days, then removed.
+- Cron run history older than 14 days is pruned to keep the scheduler's own log table bounded.
+
+The cleanup function is in the non-exposed `private` schema and is executable only by `postgres`. Deleting a room cascades to its player-membership rows. A cleanup test inserted a deliberately stale empty room and confirmed the job deleted it.
+
+The frontend keeps retrying transient reconnect failures and never deletes a saved room reference merely because one restore request failed.
