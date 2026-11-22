@@ -297,3 +297,59 @@ button:disabled { cursor: not-allowed; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+.restore-state {
+  width: min(560px, 100%);
+  margin: 55px auto;
+  padding: 42px;
+  text-align: center;
+}
+.restore-state > .spinner {
+  width: 30px;
+  height: 30px;
+  border-width: 3px;
+  margin-bottom: 18px;
+}
+.restore-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 18px;
+  color: #ffca3a;
+  background: #ffca3a18;
+  border: 1px solid #ffca3a3d;
+  border-radius: 16px;
+  font-size: 28px;
+}
+.restore-state h1 {
+  margin: 13px 0 10px;
+  font-size: clamp(25px, 5vw, 34px);
+  letter-spacing: -.05em;
+}
+.restore-state p {
+  color: #a4a8b8;
+  font-size: 12px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.restore-state .restore-note {
+  padding: 13px;
+  margin: 18px 0;
+  border: 1px solid #ffffff12;
+  border-radius: 10px;
+  background: #ffffff06;
+  font-size: 11px;
+}
+.restore-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 22px;
+}
+@media (max-width: 560px) {
+  .restore-state { padding: 27px 20px; margin: 25px auto; }
+  .restore-actions { flex-direction: column; }
+  .restore-actions .button { width: 100%; }
+}
