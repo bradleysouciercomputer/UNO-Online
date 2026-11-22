@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11131b">
+  <meta name="description" content="Play UNO Online with friends. Create a room, share a code, and play together in real time.">
+  <title>UNO Online — Play together</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="./" aria-label="UNO Online home">
+        <span class="brand-mark"><span>UNO</span></span>
+        <span class="brand-copy">UNO <b>ONLINE</b></span>
+      </a>
+      <div class="topbar-right" id="topbar-right"></div>
+    </header>
+    <main id="app" class="main-content">
+      <div class="loading-state"><span class="spinner"></span><p>Shuffling the deck…</p></div>
+    </main>
+    <footer class="site-footer">
+      <span>UNO Online</span>
+      <span>Good games. Great friends.</span>
+    </footer>
+  </div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <div id="color-modal" class="modal-backdrop is-hidden" role="dialog" aria-modal="true" aria-labelledby="color-title">
+    <div class="color-dialog">
+      <div class="dialog-eyebrow">WILD CARD</div>
+      <h2 id="color-title">Choose a color</h2>
+      <p>What color should the next player match?</p>
+      <div class="color-choices">
+        <button class="color-choice red" data-color="red" aria-label="Choose red"></button>
+        <button class="color-choice yellow" data-color="yellow" aria-label="Choose yellow"></button>
+        <button class="color-choice green" data-color="green" aria-label="Choose green"></button>
+        <button class="color-choice blue" data-color="blue" aria-label="Choose blue"></button>
+      </div>
+      <button class="button button-quiet button-full" data-action="cancel-wild">Cancel</button>
+    </div>
+  </div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
