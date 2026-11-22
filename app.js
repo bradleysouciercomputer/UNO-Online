@@ -17,6 +17,9 @@ let pendingWildCardId = null;
 let authMode = "signin";
 let busy = false;
 let toastTimer;
+let heartbeatTimer = null;
+let heartbeatGameId = null;
+let heartbeatPending = false;
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -190,7 +193,36 @@ function render() {
   else if (snapshot.status === "waiting") renderLobby();
   else renderGame();
 }
+async function sendRoomHeartbeat() {
+  const gameId = heartbeatGameId;
+  if (!gameId || !session?.user || document.visibilityState !== "visible" || heartbeatPending) return;
+  heartbeatPending = true;
+  try {
+    await api({ action: "heartbeat", gameId });
+  } catch (error) {
+    // A missed heartbeat is safe: the cleanup window is deliberately generous.
+    // The next restore/action will report if a room has actually expired.
+    console.warn("UNO room heartbeat failed:", error.message);
+  } finally {
+    heartbeatPending = false;
+  }
+}
+function stopRoomHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+  heartbeatGameId = null;
+}
+function startRoomHeartbeat(gameId) {
+  stopRoomHeartbeat();
+  heartbeatGameId = gameId;
+  void sendRoomHeartbeat();
+  heartbeatTimer = setInterval(() => void sendRoomHeartbeat(), 60 * 1000);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") void sendRoomHeartbeat();
+});
 async function stopWatching() {
+  stopRoomHeartbeat();
   if (roomChannel) {
     try { await supabase.removeChannel(roomChannel); } catch {}
   }
@@ -201,6 +233,7 @@ async function watchGame(gameId) {
   if (watchedGameId === gameId && roomChannel) return;
   await stopWatching();
   watchedGameId = gameId;
+  startRoomHeartbeat(gameId);
   await supabase.realtime.setAuth();
   roomChannel = supabase.channel("uno:" + gameId, { config: { private: true } })
     .on("broadcast", { event: "state" }, () => refreshGame())
@@ -281,6 +314,13 @@ async function restoreGame() {
         if (!retryable || attempt === 3) break;
         await new Promise((resolve) => setTimeout(resolve, [400, 900, 1600][attempt]));
       }
+    }
+    if (lastError?.status === 403 || lastError?.status === 404) {
+      localStorage.removeItem("uno-active-game");
+      snapshot = null;
+      renderDashboard();
+      notify("That room is no longer available. It may have expired after being inactive.", true);
+      return;
     }
     snapshot = null;
     renderRestoreProblem(lastError?.message);
